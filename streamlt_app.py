@@ -6,14 +6,23 @@ import io
 import requests
 from PIL import Image
 from fpdf import FPDF
-import tempfile
 
 st.set_page_config(layout="wide")
-st.title("📡 Simulador de Medición OTDR - Fibra Óptica")
+st.title("🖥️ Simulador de Medición OTDR - Fibra Óptica")
+
+# Selección longitud de onda con checkbox
+st.subheader("⚙️ Configuración de Longitud de Onda")
+uso_1310 = st.checkbox("Usar longitud de onda 1310 nm (0.35 dB/km)", value=False)
+if uso_1310:
+    atenuacion_km = 0.35
+else:
+    atenuacion_km = 0.21
+
+# Mostrar atenuación seleccionada (solo info)
+st.markdown(f"**Atenuación por km usada:** {atenuacion_km} dB/km")
 
 # Parámetros
 distancia = st.slider("📏 Distancia del tramo (km)", 1.0, 80.0, 24.0, step=1.0)
-atenuacion_km = st.slider("💡 Atenuación por km (dB)", 0.18, 0.25, 0.21, step=0.01)
 
 # Generar puntos de fusión cada 4 km
 eventos = int(distancia // 4)
@@ -29,7 +38,7 @@ for punto in puntos_evento:
 atenuacion_total = atenuacion_km * distancia + sum(atenuaciones_eventos.values())
 
 # Mostrar valor de atenuación máxima permitida
-atenuacion_maxima_permitida = round((0.21 * distancia) + (0.15 * eventos), 2)
+atenuacion_maxima_permitida = round((atenuacion_km * distancia) + (0.15 * eventos), 2)
 st.markdown(f"✅ **Atenuación máxima permitida:** {atenuacion_maxima_permitida} dB")
 
 # Mostrar evento más atenuado
@@ -123,95 +132,3 @@ else:
 if atenuaciones_eventos:
     st.info(f"🔴 Evento con mayor atenuación: {mayor_atenuacion:.2f} dB a los {mayor_distancia} km")
 
-# --- EXPORTAR PDF ---
-
-def crear_pdf():
-    # Descargar logo FICOM
-    url_logo = "https://lirp.cdn-website.com/fbb70e7e/dms3rep/multi/opt/FICOMCELEST-1920w.png"
-    response = requests.get(url_logo)
-    logo_img = Image.open(io.BytesIO(response.content))
-    logo_img = logo_img.convert("RGBA")
-    logo_img.thumbnail((150, 150))
-
-    # Guardar logo en archivo temporal
-    with tempfile.NamedTemporaryFile(delete=False, suffix=".png") as tmp_logo:
-        logo_img.save(tmp_logo.name, format="PNG")
-        ruta_logo = tmp_logo.name
-
-    # Crear buffer para la figura matplotlib (curva)
-    buf_fig = io.BytesIO()
-    fig2, ax2 = plt.subplots(figsize=(10,5))
-    ax2.plot(x, y, label="Curva OTDR")
-    ax2.set_xlabel("Distancia (km)")
-    ax2.set_ylabel("Potencia (dB)")
-    ax2.set_title("Simulación de traza OTDR")
-    ax2.grid(True)
-    for punto, perdida in atenuaciones_eventos.items():
-        ax2.axvline(punto, color='red', linestyle='--')
-        ax2.text(punto, y[np.searchsorted(x, punto)], f"-{perdida:.2f} dB", color="red", rotation=90, va='bottom')
-    if mayor_distancia is not None:
-        idx_mayor = np.searchsorted(x, mayor_distancia)
-        ax2.plot(x[idx_mayor], y[idx_mayor], 'o', color='red', markersize=12, markerfacecolor='none', markeredgewidth=2)
-    fig2.savefig(buf_fig, format='PNG')
-    plt.close(fig2)
-    buf_fig.seek(0)
-
-    # Guardar figura matplotlib en archivo temporal
-    with tempfile.NamedTemporaryFile(delete=False, suffix=".png") as tmp_fig:
-        tmp_fig.write(buf_fig.read())
-        ruta_fig = tmp_fig.name
-
-    pdf = FPDF()
-    pdf.add_page()
-
-    # Agregar logo usando ruta de archivo temporal
-    pdf.image(ruta_logo, x=10, y=10, w=30)
-
-    # Título y texto
-    pdf.set_font("Arial", "B", 16)
-    pdf.cell(0, 10, "Simulación de Medición OTDR - Fibra Óptica", ln=True, align="C")
-    pdf.ln(10)
-
-    pdf.set_font("Arial", size=12)
-    pdf.cell(0, 10, f"Distancia total: {distancia} km", ln=True)
-    pdf.cell(0, 10, f"Atenuación por km: {atenuacion_km} dB/km", ln=True)
-    pdf.cell(0, 10, f"Atenuación máxima permitida: {atenuacion_maxima_permitida} dB", ln=True)
-    pdf.cell(0, 10, f"Atenuación total estimada: {atenuacion_total:.2f} dB", ln=True)
-    if mayor_atenuacion is not None and mayor_distancia is not None:
-        pdf.cell(0, 10, f"Evento con mayor atenuación: {mayor_atenuacion:.2f} dB a {mayor_distancia} km", ln=True)
-    pdf.ln(5)
-
-    # Insertar imagen gráfica
-    pdf.image(ruta_fig, x=10, y=80, w=190)
-
-    # Tabla eventos
-    pdf.ln(105)
-    pdf.set_font("Arial", "B", 14)
-    pdf.cell(0, 10, "Detalle de eventos:", ln=True)
-    pdf.set_font("Arial", size=12)
-    pdf.cell(30, 10, "Nro Evento", 1)
-    pdf.cell(40, 10, "Distancia (km)", 1)
-    pdf.cell(60, 10, "Atenuación evento (dB)", 1)
-    pdf.cell(60, 10, "Atenuación acumulada (dB)", 1)
-    pdf.ln()
-
-    for fila in tabla_datos:
-        pdf.cell(30, 10, str(fila["Nro Evento"]), 1)
-        pdf.cell(40, 10, str(fila["Distancia (km)"]), 1)
-        pdf.cell(60, 10, str(fila["Atenuación del evento (dB)"]), 1)
-        pdf.cell(60, 10, str(fila["Atenuación acumulada (dB)"]), 1)
-        pdf.ln()
-
-    pdf.ln(10)
-    pdf.set_font("Arial", "B", 14)
-    if cumple_total and cumple_eventos:
-        pdf.cell(0, 10, "ENLACE CERTIFICADO", ln=True, align="C")
-    else:
-        pdf.cell(0, 10, "NO CERTIFICA", ln=True, align="C")
-
-    return pdf.output(dest='S').encode('latin1')
-
-
-if st.button("📥 Exportar PDF"):
-    pdf_bytes = crear_pdf()
-    st.download_button(label="Descargar PDF", data=pdf_bytes, file_name="simulacion_otdr.pdf", mime="application/pdf")
