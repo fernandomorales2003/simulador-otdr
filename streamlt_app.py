@@ -7,7 +7,7 @@ st.set_page_config(layout="wide")
 st.title("📡 Simulador de Medición OTDR - Fibra Óptica")
 
 # Parámetros
-distancia = st.slider("📏 Distancia del tramo (km)", 1.0, 80.0, 12.0, step=1.0)
+distancia = st.slider("📏 Distancia del tramo (km)", 1.0, 80.0, 24.0, step=1.0)
 
 # Selección de longitud de onda
 st.markdown("### 🎛️ Seleccione la(s) longitud(es) de onda para simular:")
@@ -22,15 +22,22 @@ if not (check_1310 or check_1550):
 atenuacion_1310 = 0.35
 atenuacion_1550 = 0.21
 
-# Generar eventos cada 4 km
+# Eventos fijos + dinámicos
 eventos = int(distancia // 4)
 puntos_evento = [round((i + 1) * 4, 2) for i in range(eventos) if (i + 1) * 4 <= distancia]
 
+# Mostrar/Ocultar ajustes de fusión
 st.subheader("🔧 Ajustar atenuación por evento de fusión")
-# Agregar conectores fijos (inicio y fin)
+mostrar_sliders = st.checkbox("Mostrar ajustes de atenuación", value=True)
+
+# Inicializar con conectores
 atenuaciones_eventos = {0.0: 0.5, distancia: 0.5}
-for punto in puntos_evento:
-    atenuaciones_eventos[punto] = st.slider(f"Evento en {punto} km", 0.00, 0.50, 0.15, step=0.01)
+if mostrar_sliders:
+    for punto in puntos_evento:
+        atenuaciones_eventos[punto] = st.slider(f"Evento en {punto} km", 0.00, 0.50, 0.15, step=0.01)
+else:
+    for punto in puntos_evento:
+        atenuaciones_eventos[punto] = 0.15  # Valor fijo si no se ajusta
 
 def calcular_atenuacion_total(at_km):
     return at_km * distancia + sum(atenuaciones_eventos.values())
@@ -38,7 +45,7 @@ def calcular_atenuacion_total(at_km):
 at_total_1310 = calcular_atenuacion_total(atenuacion_1310) if check_1310 else None
 at_total_1550 = calcular_atenuacion_total(atenuacion_1550) if check_1550 else None
 
-# Presupuesto óptico (no incluye conectores explícitamente)
+# Presupuesto óptico
 presupuesto_1310 = round((atenuacion_1310 * distancia) + (0.15 * eventos) + 1.0, 2)
 presupuesto_1550 = round((atenuacion_1550 * distancia) + (0.15 * eventos) + 1.0, 2)
 
@@ -48,7 +55,7 @@ if check_1310:
 if check_1550:
     st.markdown(f"- 1550 nm: {presupuesto_1550} dB")
 
-# Función para generar curva con conectores y ruido
+# Función para generar curva
 def generar_curva_completa(at_km):
     x_ini = np.array([0.0, 0.005, 0.075])
     y_ini = np.array([0.0, 0.8, -0.25])
@@ -88,7 +95,7 @@ if check_1550:
     x_1550, y_1550 = generar_curva_completa(atenuacion_1550)
     ax.plot(x_1550, y_1550, label="1550 nm", color="green")
 
-# Eventos
+# Eventos destacados
 for punto, perdida in atenuaciones_eventos.items():
     if perdida > 0.15 and punto not in [0.0, distancia]:
         for at_km, color in [(atenuacion_1310, 'blue'), (atenuacion_1550, 'green')]:
@@ -114,13 +121,15 @@ def generar_tabla(at_km_tabla):
     for i, (dist, att) in enumerate(eventos_lista, start=1):
         acumulado_eventos += att
         at_acumulada = (at_km_tabla * dist) + acumulado_eventos
+        reflexion = -60.0 if dist in [0.0, distancia] else 0.0
         tabla_datos.append({
             "Nro Evento": i,
             "Distancia (km)": dist,
             "Atenuación del evento (dB)": att,
-            "Atenuación acumulada (dB)": at_acumulada
+            "Atenuación acumulada (dB)": at_acumulada,
+            "Reflexión (dB)": reflexion
         })
-        if att > mayor_at:
+        if att > mayor_at and dist not in [0.0, distancia]:
             mayor_at = att
             mayor_index = i - 1
 
@@ -139,7 +148,8 @@ def generar_tabla(at_km_tabla):
         .format({
             "Distancia (km)": "{:.2f}",
             "Atenuación del evento (dB)": "{:.2f}",
-            "Atenuación acumulada (dB)": "{:.2f}"
+            "Atenuación acumulada (dB)": "{:.2f}",
+            "Reflexión (dB)": "{:.1f}"
         }),
         use_container_width=True
     )
