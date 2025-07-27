@@ -4,52 +4,69 @@ import numpy as np
 import pandas as pd
 
 st.set_page_config(layout="wide")
-st.title("💻 Simulador de Medición OTDR - Fibra Óptica")
-
-# Selección de longitudes de onda
-st.markdown("<h3 style='color:#1f4e79;'>📡 Seleccione longitudes de onda</h3>", unsafe_allow_html=True)
-col1, col2 = st.columns(2)
-with col1:
-    onda_1310 = st.checkbox("1310 nm (0.35 dB/km)", value=True)
-with col2:
-    onda_1550 = st.checkbox("1550 nm (0.21 dB/km)", value=True)
-
-if not (onda_1310 or onda_1550):
-    st.warning("Seleccione al menos una longitud de onda para simular.")
-    st.stop()
+st.title("📡 Simulador de Medición OTDR - Fibra Óptica")
 
 # Parámetros
-st.markdown("<h3 style='color:#1f4e79;'>📏 Configuración de enlace</h3>", unsafe_allow_html=True)
-distancia = st.slider("Distancia del tramo (km)", 1.0, 80.0, 24.0, step=1.0)
+distancia = st.slider("📏 Distancia del tramo (km)", 1.0, 80.0, 24.0, step=1.0)
+
+# Selección de longitud de onda
+st.markdown("### 🎛️ Seleccione la(s) longitud(es) de onda para simular:")
+check_1310 = st.checkbox("1310 nm (Atenuación 0.35 dB/km)", value=True)
+check_1550 = st.checkbox("1550 nm (Atenuación 0.21 dB/km)", value=True)
+
+if not (check_1310 or check_1550):
+    st.warning("⚠️ Seleccione al menos una longitud de onda para continuar.")
+    st.stop()
+
+# Atenuaciones por km según selección
+atenuacion_1310 = 0.35
+atenuacion_1550 = 0.21
 
 # Generar puntos de fusión cada 4 km
 eventos = int(distancia // 4)
 puntos_evento = [round((i + 1) * 4, 2) for i in range(eventos) if (i + 1) * 4 <= distancia]
 
-st.markdown("<h3 style='color:#1f4e79;'>🔧 Ajustar atenuación por evento de fusión</h3>", unsafe_allow_html=True)
+st.subheader("🔧 Ajustar atenuación por evento de fusión")
 atenuaciones_eventos = {}
 for punto in puntos_evento:
     atenuaciones_eventos[punto] = st.slider(f"Evento en {punto} km", 0.00, 0.50, 0.15, step=0.01)
 
-def calcular_y(atenuacion_km):
-    x = np.linspace(0, distancia, 1000)
+def calcular_atenuacion_total(atenuacion_km):
+    return atenuacion_km * distancia + sum(atenuaciones_eventos.values())
+
+# Cálculos totales
+atenuacion_total_1310 = calcular_atenuacion_total(atenuacion_1310) if check_1310 else None
+atenuacion_total_1550 = calcular_atenuacion_total(atenuacion_1550) if check_1550 else None
+
+# Presupuesto óptico por longitud de onda
+presupuesto_1310 = round((atenuacion_1310 * distancia) + (0.15 * eventos), 2)
+presupuesto_1550 = round((atenuacion_1550 * distancia) + (0.15 * eventos), 2)
+
+# Mostrar presupuesto óptico
+st.markdown("### 🔆 Presupuesto Óptico")
+if check_1310:
+    st.markdown(f"- 1310 nm: {presupuesto_1310} dB")
+if check_1550:
+    st.markdown(f"- 1550 nm: {presupuesto_1550} dB")
+
+# Preparar datos para graficar
+x = np.linspace(0, distancia, 1000)
+
+def generar_curva(atenuacion_km):
     y = -atenuacion_km * x
     for punto, perdida in atenuaciones_eventos.items():
         idx = np.searchsorted(x, punto)
         y[idx:] -= perdida
-    return x, y
+    return y
 
-color_1310 = "#1f77b4"  # azul metalizado
-color_1550 = "#2ca02c"  # verde
-
+# Graficar curvas según selección
 fig, ax = plt.subplots(figsize=(10, 5))
-
-if onda_1310:
-    x1310, y1310 = calcular_y(0.35)
-    ax.plot(x1310, y1310, label="1310 nm (0.35 dB/km)", color=color_1310)
-if onda_1550:
-    x1550, y1550 = calcular_y(0.21)
-    ax.plot(x1550, y1550, label="1550 nm (0.21 dB/km)", color=color_1550)
+if check_1310:
+    y_1310 = generar_curva(atenuacion_1310)
+    ax.plot(x, y_1310, label="1310 nm", color="blue")
+if check_1550:
+    y_1550 = generar_curva(atenuacion_1550)
+    ax.plot(x, y_1550, label="1550 nm", color="green")
 
 ax.set_xlabel("Distancia (km)")
 ax.set_ylabel("Potencia (dB)")
@@ -59,6 +76,7 @@ ax.legend()
 
 st.pyplot(fig)
 
+# Función para generar tabla con formato y resaltar evento mayor
 def generar_tabla(atenuacion_km_tabla):
     eventos_lista = sorted(atenuaciones_eventos.items())
     acumulado_eventos = 0
@@ -71,9 +89,9 @@ def generar_tabla(atenuacion_km_tabla):
         atenuacion_acumulada = (atenuacion_km_tabla * dist) + acumulado_eventos
         tabla_datos.append({
             "Nro Evento": i,
-            "Distancia (km)": round(dist, 2),
-            "Atenuación del evento (dB)": round(att, 2),
-            "Atenuación acumulada (dB)": round(atenuacion_acumulada, 2)
+            "Distancia (km)": dist,
+            "Atenuación del evento (dB)": att,
+            "Atenuación acumulada (dB)": atenuacion_acumulada
         })
         if att > mayor_atenuacion:
             mayor_atenuacion = att
@@ -88,50 +106,67 @@ def generar_tabla(atenuacion_km_tabla):
                 color[mayor_index] = 'background-color: #ffcccc'
             return color
 
-        st.dataframe(df_eventos.style.apply(resaltar_fila, axis=0))
+        st.dataframe(
+            df_eventos.style
+            .apply(resaltar_fila, axis=0)
+            .format({
+                "Distancia (km)": "{:.2f}",
+                "Atenuación del evento (dB)": "{:.2f}",
+                "Atenuación acumulada (dB)": "{:.2f}"
+            })
+        )
+        return mayor_atenuacion, mayor_index, df_eventos
     else:
         st.info("No hay eventos de fusión para mostrar en la tabla.")
+        return None, None, None
 
-# Mostrar tabla de eventos según selección o solo disponible
-if onda_1310 and onda_1550:
-    tabla_opcion = st.radio("Seleccione tabla de eventos a mostrar:", ("1310 nm", "1550 nm"))
-    if tabla_opcion == "1310 nm":
-        st.subheader("📋 Tabla de eventos 1310 nm")
-        generar_tabla(0.35)
-    else:
-        st.subheader("📋 Tabla de eventos 1550 nm")
-        generar_tabla(0.21)
-elif onda_1310:
-    st.subheader("📋 Tabla de eventos 1310 nm")
-    generar_tabla(0.35)
-elif onda_1550:
-    st.subheader("📋 Tabla de eventos 1550 nm")
-    generar_tabla(0.21)
+st.subheader("📋 Seleccione la tabla de eventos a mostrar:")
+tabla_1310 = st.checkbox("Mostrar tabla para 1310 nm", value=True)
+tabla_1550 = st.checkbox("Mostrar tabla para 1550 nm", value=False)
 
-# Cálculo presupuesto óptico y verificación (para 1310 y 1550 si están seleccionados)
-def calcular_presupuesto(atenuacion_km):
-    atenuacion_total = atenuacion_km * distancia + sum(atenuaciones_eventos.values())
-    atenuacion_maxima_permitida = round((atenuacion_km * distancia) + (0.15 * eventos), 2)
-    evento_supera_limite = next((p for p in atenuaciones_eventos.values() if p > 0.15), None)
-    cumple_total = atenuacion_total <= atenuacion_maxima_permitida
+# Evitar seleccionar ambas tablas a la vez
+if tabla_1310 and tabla_1550:
+    st.warning("Por favor seleccione solo una tabla a la vez.")
+    st.stop()
+elif not tabla_1310 and not tabla_1550:
+    st.info("Seleccione una tabla para mostrar.")
+    st.stop()
+
+mayor_atenuacion_tabla = None
+mayor_index_tabla = None
+
+if tabla_1310:
+    mayor_atenuacion_tabla, mayor_index_tabla, df_eventos = generar_tabla(atenuacion_1310)
+elif tabla_1550:
+    mayor_atenuacion_tabla, mayor_index_tabla, df_eventos = generar_tabla(atenuacion_1550)
+
+# Verificación de certificación
+def verificar_certificacion(atenuacion_total, presupuesto_optico):
+    cumple_total = atenuacion_total <= presupuesto_optico
+    evento_supera_limite = next(((i+1, dist, att) for i, (dist, att) in enumerate(atenuaciones_eventos.items()) if att > 0.15), None)
     cumple_eventos = evento_supera_limite is None
-    return atenuacion_total, atenuacion_maxima_permitida, cumple_total, cumple_eventos
+    return cumple_total, cumple_eventos, evento_supera_limite
 
-st.markdown("<h3 style='color:#1f4e79;'>📊 Presupuesto Óptico</h3>", unsafe_allow_html=True)
+st.subheader("✅ Resultado de certificación")
 
-if onda_1310:
-    at_total_1310, at_max_1310, cumple_tot_1310, cumple_ev_1310 = calcular_presupuesto(0.35)
-    st.markdown(f"**1310 nm:** {at_total_1310:.2f} dB / máximo permitido {at_max_1310:.2f} dB")
-    if cumple_tot_1310 and cumple_ev_1310:
-        st.success(f"✅ Enlace certificado para 1310 nm")
+if check_1310:
+    cumple_total_1310, cumple_eventos_1310, evento_supera_limite_1310 = verificar_certificacion(atenuacion_total_1310, presupuesto_1310)
+if check_1550:
+    cumple_total_1550, cumple_eventos_1550, evento_supera_limite_1550 = verificar_certificacion(atenuacion_total_1550, presupuesto_1550)
+
+def mostrar_resultado(longitud, cumple_total, cumple_eventos, evento_supera_limite, atenuacion_total):
+    if cumple_total and cumple_eventos:
+        st.success(f"✅ {longitud} nm - Atenuación Total: {atenuacion_total:.2f} dB (DENTRO del límite permitido)")
+        st.markdown("### 🟢 ENLACE CERTIFICADO")
     else:
-        st.error(f"❌ No certifica para 1310 nm")
+        st.error(f"❌ {longitud} nm - Atenuación Total: {atenuacion_total:.2f} dB")
+        st.markdown("### 🔴 NO CERTIFICA POR:")
+        if not cumple_total:
+            st.markdown(f"- 🔺 Atenuación total excede el máximo permitido")
+        if not cumple_eventos and evento_supera_limite is not None:
+            st.markdown(f"- 🔺 Evento N° {evento_supera_limite[0]} con {evento_supera_limite[2]:.2f} dB a los {evento_supera_limite[1]} km")
 
-if onda_1550:
-    at_total_1550, at_max_1550, cumple_tot_1550, cumple_ev_1550 = calcular_presupuesto(0.21)
-    st.markdown(f"**1550 nm:** {at_total_1550:.2f} dB / máximo permitido {at_max_1550:.2f} dB")
-    if cumple_tot_1550 and cumple_ev_1550:
-        st.success(f"✅ Enlace certificado para 1550 nm")
-    else:
-        st.error(f"❌ No certifica para 1550 nm")
-
+if check_1310:
+    mostrar_resultado("1310", cumple_total_1310, cumple_eventos_1310, evento_supera_limite_1310, atenuacion_total_1310)
+if check_1550:
+    mostrar_resultado("1550", cumple_total_1550, cumple_eventos_1550, evento_supera_limite_1550, atenuacion_total_1550)
