@@ -49,38 +49,40 @@ if check_1550:
 
 x = np.linspace(0, distancia, 1000)
 
+# ✅ Agrega offset y pico reflectivo al inicio y final
 def generar_curva(at_km):
     y = -at_km * x
     for punto, perdida in atenuaciones_eventos.items():
         idx = np.searchsorted(x, punto)
         y[idx:] -= perdida
+
+    # Simular conectores reflectivos: offset + pico
+    y += 0.6        # offset general
+    y[0] += 0.6     # pico reflectivo inicial
+    y[-1] += 0.6    # pico reflectivo final
+
     return y
 
-# --- Parte modificada de la gráfica para agregar picos reflectivos al inicio y final ---
-
+# --- Gráfico OTDR ---
 fig, ax = plt.subplots(figsize=(10, 5))
 if check_1310:
     y_1310 = generar_curva(atenuacion_1310)
     ax.plot(x, y_1310, label="1310 nm", color="blue")
-    # Pico reflectivo inicio (triángulo arriba)
-    ax.plot(0, y_1310[0] + 0.8, marker='^', color='blue', markersize=12, alpha=0.7, label='_nolegend_')
-    # Pico reflectivo final
-    ax.plot(distancia, y_1310[-1] + 0.8, marker='^', color='blue', markersize=12, alpha=0.7, label='_nolegend_')
+    ax.plot(0, y_1310[0], marker='^', color='blue', markersize=12, alpha=0.7, label='_nolegend_')
+    ax.plot(distancia, y_1310[-1], marker='^', color='blue', markersize=12, alpha=0.7, label='_nolegend_')
 
 if check_1550:
     y_1550 = generar_curva(atenuacion_1550)
     ax.plot(x, y_1550, label="1550 nm", color="green")
-    # Pico reflectivo inicio
-    ax.plot(0, y_1550[0] + 0.8, marker='^', color='green', markersize=12, alpha=0.7, label='_nolegend_')
-    # Pico reflectivo final
-    ax.plot(distancia, y_1550[-1] + 0.8, marker='^', color='green', markersize=12, alpha=0.7, label='_nolegend_')
+    ax.plot(0, y_1550[0], marker='^', color='green', markersize=12, alpha=0.7, label='_nolegend_')
+    ax.plot(distancia, y_1550[-1], marker='^', color='green', markersize=12, alpha=0.7, label='_nolegend_')
 
-# 🔴 Agregar círculos suaves rojos para eventos > 0.15 dB
+# 🔴 Eventos mayores a 0.15 dB
 for punto, perdida in atenuaciones_eventos.items():
     if perdida > 0.15:
         for at_km, color in [(atenuacion_1310, 'blue'), (atenuacion_1550, 'green')]:
             if (check_1310 and at_km == atenuacion_1310) or (check_1550 and at_km == atenuacion_1550):
-                y_val = -at_km * punto - sum([v for k, v in atenuaciones_eventos.items() if k <= punto])
+                y_val = -at_km * punto - sum([v for k, v in atenuaciones_eventos.items() if k <= punto]) + 0.6
                 ax.plot(punto, y_val, 'o', color='red', markersize=10, alpha=0.6, label='_nolegend_')
 
 ax.set_xlabel("Distancia (km)")
@@ -90,7 +92,7 @@ ax.grid(True)
 ax.legend()
 st.pyplot(fig)
 
-# Tabla de eventos con fila final
+# Tabla de eventos
 def generar_tabla(at_km_tabla):
     eventos_lista = sorted(atenuaciones_eventos.items())
     acumulado_eventos = 0
