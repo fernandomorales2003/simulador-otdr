@@ -6,19 +6,39 @@ import pandas as pd
 st.set_page_config(layout="wide")
 st.title("💻 Simulador de Medición OTDR - Fibra Óptica")
 
-# Color azul metalizado para títulos importantes
 color_azul = "#1E90FF"
 
-# Estilo css para aplicar color azul metalizado en subtítulos (usamos markdown con estilo inline)
-def titulo_azul(texto):
-    return f'<p style="color:{color_azul}; font-weight:bold;">{texto}</p>'
+# Estilos CSS para modificar color de barras y checkbox
+st.markdown(f"""
+<style>
+    /* Cambiar color del slider (barra) */
+    div[data-baseweb="slider"] > div > div > div > div > div {{
+        background-color: {color_azul} !important;
+    }}
+    /* Cambiar color del checkbox cuando está seleccionado */
+    div[data-baseweb="checkbox"] svg {{
+        stroke: {color_azul} !important;
+        fill: {color_azul} !important;
+    }}
+    /* Cambiar color label checkbox */
+    label[data-testid="stCheckboxLabel"] {{
+        color: {color_azul} !important;
+        font-weight: bold;
+    }}
+    /* Cambiar color label slider */
+    label[data-testid="stSliderLabel"] {{
+        color: {color_azul} !important;
+        font-weight: bold;
+    }}
+</style>
+""", unsafe_allow_html=True)
 
-# Título azul para distancia
-st.markdown(titulo_azul("📏 Distancia del tramo (km)"), unsafe_allow_html=True)
+# Distancia
+st.markdown(f'<p style="color:{color_azul}; font-weight:bold;">📏 Distancia del tramo (km)</p>', unsafe_allow_html=True)
 distancia = st.slider("", 1.0, 80.0, 14.0, step=1.0)
 
-# Título azul para selección de longitud de onda
-st.markdown(titulo_azul("📡 Selección de longitud de onda"), unsafe_allow_html=True)
+# Selección longitud de onda
+st.markdown(f'<p style="color:{color_azul}; font-weight:bold;">📡 Selección de longitud de onda</p>', unsafe_allow_html=True)
 col1, col2 = st.columns(2)
 with col1:
     onda_1310 = st.checkbox("1310 nm (0.35 dB/km)", value=True)
@@ -29,35 +49,15 @@ if not (onda_1310 or onda_1550):
     st.warning("Seleccioná al menos una longitud de onda para mostrar la curva.")
     st.stop()
 
-# Título azul para ajustes de atenuación
-st.markdown(titulo_azul("🔧 Ajustar atenuación por evento de fusión"), unsafe_allow_html=True)
+# Ajustar atenuación por evento
+st.markdown(f'<p style="color:{color_azul}; font-weight:bold;">🔧 Ajustar atenuación por evento de fusión</p>', unsafe_allow_html=True)
 
-# Generar puntos de fusión cada 4 km
 eventos = int(distancia // 4)
 puntos_evento = [round((i + 1) * 4, 2) for i in range(eventos) if (i + 1) * 4 <= distancia]
 
-# Ajustes de atenuación por evento (editable por usuario)
 atenuaciones_eventos = {}
 for punto in puntos_evento:
     atenuaciones_eventos[punto] = st.slider(f"Evento en {punto} km", 0.00, 0.50, 0.15, step=0.01)
-
-# Colores por defecto para gráfico
-color_fondo_default = "#ffffff"
-color_1310_default = "#0077be"  # azul metalizado un poco más oscuro
-color_1550_default = "#228B22"  # verde bosque
-
-# Botón para mostrar opciones de personalización
-personalizar = st.checkbox("🔧 Personalizar gráfica")
-
-if personalizar:
-    st.markdown(titulo_azul("🎨 Configuración de colores"), unsafe_allow_html=True)
-    color_fondo = st.color_picker("Color de fondo", color_fondo_default)
-    color_1310 = st.color_picker("Color curva 1310 nm", color_1310_default)
-    color_1550 = st.color_picker("Color curva 1550 nm", color_1550_default)
-else:
-    color_fondo = color_fondo_default
-    color_1310 = color_1310_default
-    color_1550 = color_1550_default
 
 # Función para calcular total y máximo
 def calcular_total_y_max(atenuacion_km):
@@ -65,40 +65,42 @@ def calcular_total_y_max(atenuacion_km):
     atenuacion_maxima_permitida = round((0.21 * distancia) + (0.15 * eventos), 2)
     return atenuacion_total, atenuacion_maxima_permitida
 
-# Calcular para 1310 y 1550 si están activos
+# Cálculos según selección
 if onda_1310:
     atenuacion_total_1310, atenuacion_maxima_1310 = calcular_total_y_max(0.35)
 if onda_1550:
     atenuacion_total_1550, atenuacion_maxima_1550 = calcular_total_y_max(0.21)
 
-# Mostrar Presupuesto óptico con longitud de onda seleccionada
-if onda_1550:
-    texto_presupuesto = f"PRESUPUESTO ÓPTICO (1550 nm): {atenuacion_maxima_1550} dB"
-else:
-    texto_presupuesto = f"PRESUPUESTO ÓPTICO (1310 nm): {atenuacion_maxima_1310} dB"
-st.markdown(f"✅ **{texto_presupuesto}**")
+# Mostrar presupuesto óptico según selección
+if onda_1310 and onda_1550:
+    st.markdown(f"✅ **PRESUPUESTO ÓPTICO (1310 nm): {atenuacion_maxima_1310} dB**")
+    st.markdown(f"✅ **PRESUPUESTO ÓPTICO (1550 nm): {atenuacion_maxima_1550} dB**")
+elif onda_1310:
+    st.markdown(f"✅ **PRESUPUESTO ÓPTICO (1310 nm): {atenuacion_maxima_1310} dB**")
+elif onda_1550:
+    st.markdown(f"✅ **PRESUPUESTO ÓPTICO (1550 nm): {atenuacion_maxima_1550} dB**")
 
 # Simulación curvas OTDR
 x = np.linspace(0, distancia, 1000)
 fig, ax = plt.subplots(figsize=(10, 5))
-fig.patch.set_facecolor(color_fondo)
-ax.set_facecolor(color_fondo)
+fig.patch.set_facecolor("#ffffff")
+ax.set_facecolor("#ffffff")
 
 if onda_1310:
     y_1310 = -0.35 * x
     for punto, perdida in atenuaciones_eventos.items():
         idx = np.searchsorted(x, punto)
         y_1310[idx:] -= perdida
-    ax.plot(x, y_1310, label="1310 nm", color=color_1310)
+    ax.plot(x, y_1310, label="1310 nm", color="#0077be")  # azul metalizado
 
 if onda_1550:
     y_1550 = -0.21 * x
     for punto, perdida in atenuaciones_eventos.items():
         idx = np.searchsorted(x, punto)
         y_1550[idx:] -= perdida
-    ax.plot(x, y_1550, label="1550 nm", color=color_1550)
+    ax.plot(x, y_1550, label="1550 nm", color="#228B22")  # verde bosque
 
-# Texto de atenuación en eventos (negro, sin líneas punteadas)
+# Etiquetas de atenuación en eventos (negro, sin líneas punteadas)
 for punto, perdida in atenuaciones_eventos.items():
     y_pos = 0
     if onda_1550:
@@ -109,15 +111,15 @@ for punto, perdida in atenuaciones_eventos.items():
         y_pos = y_1310[idx]
     ax.text(punto, y_pos, f"-{perdida:.2f} dB", color="black", rotation=90, va='bottom')
 
-# Marcar evento mayor con círculo
+# Evento mayor con círculo
 evento_mayor = max(atenuaciones_eventos.items(), key=lambda x: x[1]) if atenuaciones_eventos else None
 if evento_mayor:
     mayor_distancia = evento_mayor[0]
     idx_mayor = np.searchsorted(x, mayor_distancia)
     if onda_1310:
-        ax.plot(x[idx_mayor], y_1310[idx_mayor], 'o', color=color_1310, markersize=12, markerfacecolor='none', markeredgewidth=2)
+        ax.plot(x[idx_mayor], y_1310[idx_mayor], 'o', color="#0077be", markersize=12, markerfacecolor='none', markeredgewidth=2)
     if onda_1550:
-        ax.plot(x[idx_mayor], y_1550[idx_mayor], 'o', color=color_1550, markersize=12, markerfacecolor='none', markeredgewidth=2)
+        ax.plot(x[idx_mayor], y_1550[idx_mayor], 'o', color="#228B22", markersize=12, markerfacecolor='none', markeredgewidth=2)
 
 ax.set_xlabel("Distancia (km)")
 ax.set_ylabel("Potencia (dB)")
