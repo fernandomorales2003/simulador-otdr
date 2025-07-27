@@ -153,6 +153,3 @@ for onda, (total, max_permitido) in resultados.items():
             st.markdown(f"- 🔺 Atenuación total excede el máximo permitido de {max_permitido:.2f} dB")
         if not cumple_eventos:
             st.markdown(f"- 🔺 Evento N° {evento_supera_limite[0]} con {evento_supera_limite[2]:.2f} dB a los {evento_supera_limite[1]} km")
-
-
-
