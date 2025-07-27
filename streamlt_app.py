@@ -56,13 +56,24 @@ def generar_curva(at_km):
         y[idx:] -= perdida
     return y
 
+# --- Parte modificada de la gráfica para agregar picos reflectivos al inicio y final ---
+
 fig, ax = plt.subplots(figsize=(10, 5))
 if check_1310:
     y_1310 = generar_curva(atenuacion_1310)
     ax.plot(x, y_1310, label="1310 nm", color="blue")
+    # Pico reflectivo inicio (triángulo arriba)
+    ax.plot(0, y_1310[0] + 0.8, marker='^', color='blue', markersize=12, alpha=0.7, label='_nolegend_')
+    # Pico reflectivo final
+    ax.plot(distancia, y_1310[-1] + 0.8, marker='^', color='blue', markersize=12, alpha=0.7, label='_nolegend_')
+
 if check_1550:
     y_1550 = generar_curva(atenuacion_1550)
     ax.plot(x, y_1550, label="1550 nm", color="green")
+    # Pico reflectivo inicio
+    ax.plot(0, y_1550[0] + 0.8, marker='^', color='green', markersize=12, alpha=0.7, label='_nolegend_')
+    # Pico reflectivo final
+    ax.plot(distancia, y_1550[-1] + 0.8, marker='^', color='green', markersize=12, alpha=0.7, label='_nolegend_')
 
 # 🔴 Agregar círculos suaves rojos para eventos > 0.15 dB
 for punto, perdida in atenuaciones_eventos.items():
