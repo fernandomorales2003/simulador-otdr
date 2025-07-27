@@ -35,7 +35,7 @@ st.markdown(f"""
 
 # Distancia
 st.markdown(f'<p style="color:{color_azul}; font-weight:bold;">📏 Distancia del tramo (km)</p>', unsafe_allow_html=True)
-distancia = st.slider("", 1.0, 80.0, 14.0, step=1.0)
+distancia = st.slider("", 1.0, 80.0, 24.0, step=1.0)
 
 # Selección longitud de onda
 st.markdown(f'<p style="color:{color_azul}; font-weight:bold;">📡 Selección de longitud de onda</p>', unsafe_allow_html=True)
@@ -188,3 +188,4 @@ else:
 # Leyenda adicional
 if atenuaciones_eventos:
     st.info(f"🔴 Evento con mayor atenuación: {mayor_atenuacion:.2f} dB a los {evento_mayor[0]} km")
+
