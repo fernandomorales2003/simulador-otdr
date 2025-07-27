@@ -1,31 +1,53 @@
+import streamlit as st
 import matplotlib.pyplot as plt
 import numpy as np
 
-# Parámetros de la fibra
-distancia_total_km = 5
-atenuacion_por_km = 0.35
+st.set_page_config(layout="wide")
+st.title("📡 Simulación OTDR con Conector Inicial")
 
-# Segmento inicial (conector de fibra óptica)
-x_conector = np.array([0.0, 0.005, 0.075])  # 0 m, 5 m, 75 m
-y_conector = np.array([0.0, 1.0, -0.5])     # ganancia y caída reflejada
+# --- Parámetros configurables ---
+distancia_total_km = st.slider("📏 Distancia total del tramo (km)", 1.0, 80.0, 5.0, step=1.0)
+atenuacion_por_km = st.slider("💡 Atenuación (dB/km)", 0.1, 1.0, 0.35, step=0.01)
+ganancia_conector = st.slider("🔺 Pico reflectivo del conector (dB)", 0.5, 3.0, 1.0, step=0.1)
+nivel_post_conector = st.slider("📉 Nivel luego del conector (dB)", -2.0, 0.0, -0.5, step=0.1)
 
-# Segmento de la fibra óptica (desde 75 m en adelante)
-x_fibra = np.linspace(0.075, distancia_total_km, 1000)
-y_fibra = -atenuacion_por_km * x_fibra - 0.5  # continuar desde el nivel del conector
+# --- Puntos clave del conector inicial ---
+distancia_pico_reflex = 0.005        # 5 metros (km)
+distancia_fin_conector = 0.075       # 75 metros (km)
 
-# Combinar ambos segmentos
+# --- Generar traza del conector ---
+x_conector = np.array([
+    0.0,
+    distancia_pico_reflex,
+    distancia_fin_conector
+])
+y_conector = np.array([
+    0.0,
+    ganancia_conector,
+    nivel_post_conector
+])
+
+# --- Traza principal (fibra óptica) ---
+x_fibra = np.linspace(distancia_fin_conector, distancia_total_km, 1000)
+y_fibra = -atenuacion_por_km * x_fibra + nivel_post_conector
+
+# --- Concatenar curva completa ---
 x_total = np.concatenate([x_conector, x_fibra])
 y_total = np.concatenate([y_conector, y_fibra])
 
-# Graficar
-plt.figure(figsize=(10, 5))
-plt.plot(x_total, y_total, label="Traza OTDR", color="blue")
-plt.xlabel("Distancia (km)")
-plt.ylabel("Potencia (dB)")
-plt.title("Simulación de conector de fibra óptica al inicio")
-plt.grid(True)
-plt.ylim(-5, 2)
-plt.xlim(0, distancia_total_km)
-plt.tight_layout()
-plt.show()
+# --- Gráfico ---
+fig, ax = plt.subplots(figsize=(10, 5))
+ax.plot(x_total, y_total, label="Curva OTDR", color="blue", linewidth=2)
+ax.scatter(distancia_pico_reflex, ganancia_conector, color="red", s=100, label="Pico reflectivo")
+
+ax.set_xlabel("Distancia (km)")
+ax.set_ylabel("Potencia (dB)")
+ax.set_title("Simulación de conector de fibra óptica al inicio")
+ax.grid(True)
+ax.legend()
+ax.set_ylim(-5, 2)
+ax.set_xlim(0, distancia_total_km)
+
+st.pyplot(fig)
+
 
