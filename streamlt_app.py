@@ -7,7 +7,7 @@ st.set_page_config(layout="wide")
 st.title("📡 Simulador de Medición OTDR - Fibra Óptica")
 
 # Parámetros
-distancia = st.slider("📏 Distancia del tramo (km)", 1.0, 80.0, 24.0, step=1.0)
+distancia = st.slider("📏 Distancia del tramo (km)", 1.0, 80.0, 10.0, step=1.0)
 
 # Selección de longitud de onda
 st.markdown("### 🎛️ Seleccione la(s) longitud(es) de onda para simular:")
@@ -76,7 +76,7 @@ ax.legend()
 
 st.pyplot(fig)
 
-# Función para generar tabla con formato y resaltar evento mayor
+# Tabla de eventos con última fila de pérdida total
 def generar_tabla(atenuacion_km_tabla):
     eventos_lista = sorted(atenuaciones_eventos.items())
     acumulado_eventos = 0
@@ -97,34 +97,43 @@ def generar_tabla(atenuacion_km_tabla):
             mayor_atenuacion = att
             mayor_index = i - 1
 
-    if tabla_datos:
-        df_eventos = pd.DataFrame(tabla_datos)
+    # Agregar fila final con pérdida total
+    atenuacion_total_final = round(atenuacion_km_tabla * distancia + sum(atenuaciones_eventos.values()), 2)
+    tabla_datos.append({
+        "Nro Evento": "—",
+        "Distancia (km)": distancia,
+        "Atenuación del evento (dB)": 0.00,
+        "Atenuación acumulada (dB)": atenuacion_total_final
+    })
+    fila_total_index = len(tabla_datos) - 1
 
-        def resaltar_fila(x):
-            color = [''] * len(x)
-            if mayor_index >= 0:
-                color[mayor_index] = 'background-color: #ffcccc'
-            return color
+    df_eventos = pd.DataFrame(tabla_datos)
 
-        st.dataframe(
-            df_eventos.style
-            .apply(resaltar_fila, axis=0)
-            .format({
-                "Distancia (km)": "{:.2f}",
-                "Atenuación del evento (dB)": "{:.2f}",
-                "Atenuación acumulada (dB)": "{:.2f}"
-            })
-        )
-        return mayor_atenuacion, mayor_index, df_eventos
-    else:
-        st.info("No hay eventos de fusión para mostrar en la tabla.")
-        return None, None, None
+    def resaltar_fila(x):
+        colores = [''] * len(x)
+        if mayor_index >= 0:
+            colores[mayor_index] = 'background-color: #ffcccc'
+        colores[fila_total_index] = 'background-color: #ccffcc'
+        return colores
 
+    st.dataframe(
+        df_eventos.style
+        .apply(resaltar_fila, axis=0)
+        .format({
+            "Distancia (km)": "{:.2f}",
+            "Atenuación del evento (dB)": "{:.2f}",
+            "Atenuación acumulada (dB)": "{:.2f}"
+        }),
+        use_container_width=True
+    )
+
+    return mayor_atenuacion, mayor_index, df_eventos
+
+# Mostrar tabla de eventos
 st.subheader("📋 Seleccione la tabla de eventos a mostrar:")
 tabla_1310 = st.checkbox("Mostrar tabla para 1310 nm", value=True)
 tabla_1550 = st.checkbox("Mostrar tabla para 1550 nm", value=False)
 
-# Evitar seleccionar ambas tablas a la vez
 if tabla_1310 and tabla_1550:
     st.warning("Por favor seleccione solo una tabla a la vez.")
     st.stop()
