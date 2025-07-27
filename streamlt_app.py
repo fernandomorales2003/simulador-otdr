@@ -1,113 +1,111 @@
 import streamlit as st
-import pandas as pd
 import matplotlib.pyplot as plt
+import numpy as np
+import pandas as pd
 
-# Configuración general
-st.set_page_config(page_title="Simulador de Medición OTDR", layout="centered")
+st.set_page_config(layout="wide")
 
-st.title("🖥️ Simulador de Medición OTDR")
+st.title("Simulador de Curva OTDR")
+st.markdown("Ajusta los parámetros para generar una curva OTDR personalizada.")
 
-st.subheader("Configuración de la medición")
+# Parámetros
+distancia = st.slider("Selecciona la distancia (km):", 1, 80, 20)
+atenuacion_km_1310 = 0.35
+atenuacion_km_1550 = 0.25
 
-# Selección de distancia
-distancia = st.slider("📏 Distancia total (km)", min_value=1, max_value=80, value=10, step=1)
+# Selector de longitud de onda
+modo = st.radio("Selecciona longitud de onda:", ["1310 nm", "1550 nm"])
+atenuacion_km = atenuacion_km_1310 if modo == "1310 nm" else atenuacion_km_1550
 
-# Selección de longitud de onda
-st.markdown("### Longitud de onda (seleccione una):")
-col1, col2 = st.columns(2)
-with col1:
-    usar_1310 = st.checkbox("1310 nm (0.35 dB/km)", value=True)
-with col2:
-    usar_1550 = st.checkbox("1550 nm (0.21 dB/km)", value=False)
+# Eventos en dB por distancia
+atenuaciones_eventos_1310 = {4: 0.3, 12: 1.5, 18: 0.8}
+atenuaciones_eventos_1550 = {4: 0.6, 12: 2.0, 18: 1.0}
+atenuaciones_eventos = atenuaciones_eventos_1310 if modo == "1310 nm" else atenuaciones_eventos_1550
 
-# Validar que al menos una longitud de onda esté seleccionada
-if not usar_1310 and not usar_1550:
-    st.warning("Por favor, seleccione al menos una longitud de onda para continuar.")
-    st.stop()
+# Función para generar datos de curva
+def generar_datos_curva(distancia, atenuacion_km, atenuaciones_eventos):
+    pasos = distancia * 100
+    x = np.linspace(0, distancia, pasos)
+    y = np.zeros_like(x)
+    eventos_aplicados = np.zeros_like(x)
+    acumulado_eventos = 0
 
-# Atenuación por evento de fusión
-atenuacion_evento = st.number_input("🔧 Ajustar atenuación por evento de fusión (dB)", min_value=0.0, max_value=1.0, value=0.1, step=0.01)
+    for i, distancia_actual in enumerate(x):
+        eventos_aplicados[i] = acumulado_eventos
+        if int(distancia_actual) in atenuaciones_eventos:
+            acumulado_eventos += atenuaciones_eventos[int(distancia_actual)]
+        y[i] = -(atenuacion_km * distancia_actual + eventos_aplicados[i])
 
-# Definir eventos simulados cada 4 km
-eventos = list(range(4, distancia, 4))
-eventos.append(distancia) if eventos[-1] != distancia else None
+    return x, y
 
-# Función para calcular eventos
-def calcular_eventos(lambda_nm):
-    if lambda_nm == 1310:
-        atenuacion_km = 0.35
-    else:
-        atenuacion_km = 0.21
+# Generar datos
+x, y = generar_datos_curva(distancia, atenuacion_km, atenuaciones_eventos)
 
-    datos = []
-    acumulada = 0.0
-    anterior = 0.0
-    for i, punto in enumerate(eventos):
-        tramo = punto - anterior
-        perdida = tramo * atenuacion_km + (atenuacion_evento if i > 0 else 0)
-        acumulada += perdida
-        datos.append({
-            "Evento (km)": punto,
-            "Tramo (km)": tramo,
-            "Atenuación (dB)": round(perdida, 2),
-            "Atenuación Acumulada (dB)": round(acumulada, 2)
-        })
-        anterior = punto
-
-    # Agregar pérdida del tramo final si la distancia no cae justo en un evento
-    if eventos[-1] < distancia:
-        tramo_final = distancia - eventos[-1]
-        perdida_final = tramo_final * atenuacion_km
-        acumulada += perdida_final
-        datos.append({
-            "Evento (km)": distancia,
-            "Tramo (km)": tramo_final,
-            "Atenuación (dB)": round(perdida_final, 2),
-            "Atenuación Acumulada (dB)": round(acumulada, 2)
-        })
-
-    return pd.DataFrame(datos)
-
-# Mostrar tabla según selección
-st.subheader("📋 Tabla de eventos")
-if usar_1310 and not usar_1550:
-    st.markdown("**Longitud de onda: 1310 nm**")
-    df = calcular_eventos(1310)
-    st.dataframe(df, use_container_width=True)
-
-elif usar_1550 and not usar_1310:
-    st.markdown("**Longitud de onda: 1550 nm**")
-    df = calcular_eventos(1550)
-    st.dataframe(df, use_container_width=True)
-
-else:
-    st.info("Seleccione solo una longitud de onda para mostrar la tabla de eventos.")
-
-# Mostrar presupuesto óptico
-st.subheader("📉 Presupuesto Óptico Estimado")
-if usar_1310:
-    perdida_1310 = round(distancia * 0.35 + (len(eventos) - 1) * atenuacion_evento, 2)
-    st.write(f"🔵 1310 nm: {perdida_1310} dB")
-if usar_1550:
-    perdida_1550 = round(distancia * 0.21 + (len(eventos) - 1) * atenuacion_evento, 2)
-    st.write(f"🟢 1550 nm: {perdida_1550} dB")
-
-# Gráfico
-st.subheader("📈 Simulación de curva OTDR")
-
-fig, ax = plt.subplots()
-if usar_1310:
-    df1310 = calcular_eventos(1310)
-    ax.plot(df1310["Evento (km)"], df1310["Atenuación Acumulada (dB)"], color="blue", label="1310 nm", marker="o")
-if usar_1550:
-    df1550 = calcular_eventos(1550)
-    ax.plot(df1550["Evento (km)"], df1550["Atenuación Acumulada (dB)"], color="green", label="1550 nm", marker="o")
-
+# Graficar curva
+fig, ax = plt.subplots(figsize=(10, 5))
+ax.plot(x, y, label="Curva OTDR", color="blue", linewidth=2)
+ax.set_title(f"Curva OTDR Simulada - {modo}")
 ax.set_xlabel("Distancia (km)")
-ax.set_ylabel("Atenuación acumulada (dB)")
-ax.set_title("Curva OTDR Simulada")
+ax.set_ylabel("Potencia (dB)")
 ax.grid(True)
 ax.legend()
 st.pyplot(fig)
 
+# Tabla de eventos
+st.subheader("Tabla de eventos")
 
+def generar_tabla(atenuacion_km_tabla):
+    eventos_lista = sorted(atenuaciones_eventos.items())
+    acumulado_eventos = 0
+    tabla_datos = []
+    mayor_index = -1
+    mayor_atenuacion = 0
+
+    for i, (dist, att) in enumerate(eventos_lista, start=1):
+        acumulado_eventos += att
+        atenuacion_acumulada = (atenuacion_km_tabla * dist) + acumulado_eventos
+        tabla_datos.append({
+            "Nro Evento": i,
+            "Distancia (km)": dist,
+            "Atenuación del evento (dB)": att,
+            "Atenuación acumulada (dB)": atenuacion_acumulada
+        })
+        if att > mayor_atenuacion:
+            mayor_atenuacion = att
+            mayor_index = i - 1
+
+    # Agregar fila final: pérdida total si no hay evento en el último km
+    atenuacion_total_final = (atenuacion_km_tabla * distancia) + sum(atenuaciones_eventos.values())
+    tabla_datos.append({
+        "Nro Evento": "—",
+        "Distancia (km)": distancia,
+        "Atenuación del evento (dB)": 0.00,
+        "Atenuación acumulada (dB)": round(atenuacion_total_final, 2)
+    })
+
+    df_eventos = pd.DataFrame(tabla_datos)
+
+    def resaltar_fila(x):
+        estilos = []
+        for i in range(len(x)):
+            if i == mayor_index:
+                estilos.append('background-color: #ffcccc')  # Evento más alto
+            elif i == len(x) - 1:
+                estilos.append('background-color: #ccffcc')  # Fila final
+            else:
+                estilos.append('')
+        return estilos
+
+    st.dataframe(
+        df_eventos.style
+        .apply(resaltar_fila, axis=0)
+        .format({
+            "Distancia (km)": "{:.2f}",
+            "Atenuación del evento (dB)": "{:.2f}",
+            "Atenuación acumulada (dB)": "{:.2f}"
+        }),
+        use_container_width=True
+    )
+
+# Mostrar tabla
+generar_tabla(atenuacion_km)
