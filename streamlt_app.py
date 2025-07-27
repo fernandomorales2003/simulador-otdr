@@ -7,7 +7,7 @@ st.set_page_config(layout="wide")
 st.title("📡 Simulador de Medición OTDR - Fibra Óptica")
 
 # Parámetros
-distancia = st.slider("📏 Distancia del tramo (km)", 1.0, 80.0, 24.0, step=1.0)
+distancia = st.slider("📏 Distancia del tramo (km)", 1.0, 80.0, 10.0, step=1.0)
 
 # Selección de longitud de onda
 st.markdown("### 🎛️ Seleccione la(s) longitud(es) de onda para simular:")
