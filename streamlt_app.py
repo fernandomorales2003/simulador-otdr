@@ -127,3 +127,6 @@ if tabla_datos:
     st.dataframe(df_eventos.style.apply(resaltar_fila, axis=0))
 else:
     st.info("No hay eventos de fusión para mostrar en la tabla.")
+
+
+
