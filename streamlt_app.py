@@ -39,7 +39,6 @@ def calcular_y(atenuacion_km):
         y[idx:] -= perdida
     return x, y
 
-# Colores para curvas
 color_1310 = "#1f77b4"  # azul metalizado
 color_1550 = "#2ca02c"  # verde
 
@@ -60,39 +59,13 @@ ax.legend()
 
 st.pyplot(fig)
 
-# Cálculo prespuesto óptico y verificación
-def calcular_presupuesto(atenuacion_km):
-    atenuacion_total = atenuacion_km * distancia + sum(atenuaciones_eventos.values())
-    atenuacion_maxima_permitida = round((atenuacion_km * distancia) + (0.15 * eventos), 2)
-    evento_supera_limite = next((p for p in atenuaciones_eventos.values() if p > 0.15), None)
-    cumple_total = atenuacion_total <= atenuacion_maxima_permitida
-    cumple_eventos = evento_supera_limite is None
-    return atenuacion_total, atenuacion_maxima_permitida, cumple_total, cumple_eventos
-
-presupuesto_1310 = None
-presupuesto_1550 = None
+# Definir atenuacion_km para tabla según longitud de onda prioritaria
 if onda_1310:
-    presupuesto_1310 = calcular_presupuesto(0.35)
-if onda_1550:
-    presupuesto_1550 = calcular_presupuesto(0.21)
-
-st.markdown("<h3 style='color:#1f4e79;'>📊 Presupuesto Óptico</h3>", unsafe_allow_html=True)
-if onda_1310:
-    at_total, at_max, cumple_tot, cumple_ev = presupuesto_1310
-    color = color_1310
-    st.markdown(f"**1310 nm:** {at_total:.2f} dB / máximo permitido {at_max:.2f} dB")
-    if cumple_tot and cumple_ev:
-        st.success(f"✅ Enlace certificado para 1310 nm")
-    else:
-        st.error(f"❌ No certifica para 1310 nm")
-if onda_1550:
-    at_total, at_max, cumple_tot, cumple_ev = presupuesto_1550
-    color = color_1550
-    st.markdown(f"**1550 nm:** {at_total:.2f} dB / máximo permitido {at_max:.2f} dB")
-    if cumple_tot and cumple_ev:
-        st.success(f"✅ Enlace certificado para 1550 nm")
-    else:
-        st.error(f"❌ No certifica para 1550 nm")
+    atenuacion_km_tabla = 0.35
+elif onda_1550:
+    atenuacion_km_tabla = 0.21
+else:
+    atenuacion_km_tabla = 0  # Por si no se selecciona nada (pero se detuvo arriba)
 
 # Tabla de eventos con 2 decimales
 eventos_lista = sorted(atenuaciones_eventos.items())
@@ -103,7 +76,7 @@ mayor_atenuacion = 0
 
 for i, (dist, att) in enumerate(eventos_lista, start=1):
     acumulado_eventos += att
-    atenuacion_acumulada = (atenuacion_km * dist) + acumulado_eventos
+    atenuacion_acumulada = (atenuacion_km_tabla * dist) + acumulado_eventos
     tabla_datos.append({
         "Nro Evento": i,
         "Distancia (km)": round(dist, 2),
@@ -128,5 +101,32 @@ if tabla_datos:
 else:
     st.info("No hay eventos de fusión para mostrar en la tabla.")
 
+# Cálculo presupuesto óptico y verificación (para 1310 y 1550 si están seleccionados)
+def calcular_presupuesto(atenuacion_km):
+    atenuacion_total = atenuacion_km * distancia + sum(atenuaciones_eventos.values())
+    atenuacion_maxima_permitida = round((atenuacion_km * distancia) + (0.15 * eventos), 2)
+    evento_supera_limite = next((p for p in atenuaciones_eventos.values() if p > 0.15), None)
+    cumple_total = atenuacion_total <= atenuacion_maxima_permitida
+    cumple_eventos = evento_supera_limite is None
+    return atenuacion_total, atenuacion_maxima_permitida, cumple_total, cumple_eventos
 
+if onda_1310:
+    at_total_1310, at_max_1310, cumple_tot_1310, cumple_ev_1310 = calcular_presupuesto(0.35)
+if onda_1550:
+    at_total_1550, at_max_1550, cumple_tot_1550, cumple_ev_1550 = calcular_presupuesto(0.21)
 
+st.markdown("<h3 style='color:#1f4e79;'>📊 Presupuesto Óptico</h3>", unsafe_allow_html=True)
+
+if onda_1310:
+    st.markdown(f"**1310 nm:** {at_total_1310:.2f} dB / máximo permitido {at_max_1310:.2f} dB")
+    if cumple_tot_1310 and cumple_ev_1310:
+        st.success(f"✅ Enlace certificado para 1310 nm")
+    else:
+        st.error(f"❌ No certifica para 1310 nm")
+
+if onda_1550:
+    st.markdown(f"**1550 nm:** {at_total_1550:.2f} dB / máximo permitido {at_max_1550:.2f} dB")
+    if cumple_tot_1550 and cumple_ev_1550:
+        st.success(f"✅ Enlace certificado para 1550 nm")
+    else:
+        st.error(f"❌ No certifica para 1550 nm")
