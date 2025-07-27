@@ -28,16 +28,8 @@ puntos_evento = [round((i + 1) * 4, 2) for i in range(eventos) if (i + 1) * 4 <=
 
 st.subheader("🔧 Ajustar atenuación por evento de fusión")
 atenuaciones_eventos = {}
-
-# Evento inicial (conector)
-atenuaciones_eventos[0.0] = st.slider(f"Conector INICIO en 0.0 km", 0.00, 1.00, 0.30, step=0.01)
-
-# Eventos intermedios
 for punto in puntos_evento:
     atenuaciones_eventos[punto] = st.slider(f"Evento en {punto} km", 0.00, 0.50, 0.15, step=0.01)
-
-# Evento final (conector)
-atenuaciones_eventos[distancia] = st.slider(f"Conector FINAL en {distancia} km", 0.00, 1.00, 0.30, step=0.01)
 
 def calcular_atenuacion_total(at_km):
     return at_km * distancia + sum(atenuaciones_eventos.values())
@@ -45,9 +37,9 @@ def calcular_atenuacion_total(at_km):
 at_total_1310 = calcular_atenuacion_total(atenuacion_1310) if check_1310 else None
 at_total_1550 = calcular_atenuacion_total(atenuacion_1550) if check_1550 else None
 
-# Presupuesto óptico considerando los conectores como eventos adicionales
-presupuesto_1310 = round((atenuacion_1310 * distancia) + (0.15 * eventos) + 0.60, 2)  # 0.3 + 0.3 conectores
-presupuesto_1550 = round((atenuacion_1550 * distancia) + (0.15 * eventos) + 0.60, 2)
+# Presupuesto óptico
+presupuesto_1310 = round((atenuacion_1310 * distancia) + (0.15 * eventos), 2)
+presupuesto_1550 = round((atenuacion_1550 * distancia) + (0.15 * eventos), 2)
 
 st.markdown("### 🔆 Presupuesto Óptico")
 if check_1310:
@@ -59,7 +51,6 @@ x = np.linspace(0, distancia, 1000)
 
 def generar_curva(at_km):
     y = -at_km * x
-    # Para cada evento, aplicar la atenuación a partir del punto
     for punto, perdida in atenuaciones_eventos.items():
         idx = np.searchsorted(x, punto)
         y[idx:] -= perdida
@@ -73,11 +64,11 @@ if check_1550:
     y_1550 = generar_curva(atenuacion_1550)
     ax.plot(x, y_1550, label="1550 nm", color="green")
 
-# 🔴 Círculos rojos para eventos > 0.15 dB
+# 🔴 Agregar círculos suaves rojos para eventos > 0.15 dB
 for punto, perdida in atenuaciones_eventos.items():
     if perdida > 0.15:
-        for at_km, color, check in [(atenuacion_1310, 'blue', check_1310), (atenuacion_1550, 'green', check_1550)]:
-            if check:
+        for at_km, color in [(atenuacion_1310, 'blue'), (atenuacion_1550, 'green')]:
+            if (check_1310 and at_km == atenuacion_1310) or (check_1550 and at_km == atenuacion_1550):
                 y_val = -at_km * punto - sum([v for k, v in atenuaciones_eventos.items() if k <= punto])
                 ax.plot(punto, y_val, 'o', color='red', markersize=10, alpha=0.6, label='_nolegend_')
 
@@ -88,7 +79,7 @@ ax.grid(True)
 ax.legend()
 st.pyplot(fig)
 
-# Tabla de eventos con fila final y eventos inicial y final incluidos
+# Tabla de eventos con fila final
 def generar_tabla(at_km_tabla):
     eventos_lista = sorted(atenuaciones_eventos.items())
     acumulado_eventos = 0
