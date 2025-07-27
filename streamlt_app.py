@@ -6,6 +6,7 @@ import io
 import requests
 from PIL import Image
 from fpdf import FPDF
+import tempfile
 
 st.set_page_config(layout="wide")
 st.title("📡 Simulador de Medición OTDR - Fibra Óptica")
@@ -132,9 +133,13 @@ def crear_pdf():
     logo_img = logo_img.convert("RGBA")
     logo_img.thumbnail((150, 150))
 
+    # Guardar logo en archivo temporal
+    with tempfile.NamedTemporaryFile(delete=False, suffix=".png") as tmp_logo:
+        logo_img.save(tmp_logo.name, format="PNG")
+        ruta_logo = tmp_logo.name
+
     # Crear buffer para la figura matplotlib (curva)
     buf_fig = io.BytesIO()
-    # Volver a graficar para guardar sin Streamlit
     fig2, ax2 = plt.subplots(figsize=(10,5))
     ax2.plot(x, y, label="Curva OTDR")
     ax2.set_xlabel("Distancia (km)")
@@ -151,43 +156,39 @@ def crear_pdf():
     plt.close(fig2)
     buf_fig.seek(0)
 
-    # Crear PDF con fpdf
+    # Guardar figura matplotlib en archivo temporal
+    with tempfile.NamedTemporaryFile(delete=False, suffix=".png") as tmp_fig:
+        tmp_fig.write(buf_fig.read())
+        ruta_fig = tmp_fig.name
+
     pdf = FPDF()
     pdf.add_page()
 
-    # Agregar marca de agua (logo con transparencia)
-    pdf.image(buf=logo_img.tobytes(), x=30, y=220, w=50, h=50, type='PNG')  # Aquí se agregaría el logo, pero fpdf no soporta buffers así
+    # Agregar logo usando ruta de archivo temporal
+    pdf.image(ruta_logo, x=10, y=10, w=30)
 
-    # Alternativa: guardar logo temporalmente y luego agregar imagen en pdf
-    # Como en Streamlit no podemos crear archivos locales, guardamos en buffer:
-    img_buf = io.BytesIO()
-    logo_img.save(img_buf, format='PNG')
-    img_buf.seek(0)
-    pdf.image(img_buf, x=80, y=250, w=50, h=50, type='PNG')
-
-    # Título
+    # Título y texto
     pdf.set_font("Arial", "B", 16)
     pdf.cell(0, 10, "Simulación de Medición OTDR - Fibra Óptica", ln=True, align="C")
     pdf.ln(10)
 
-    # Tabla con datos
     pdf.set_font("Arial", size=12)
     pdf.cell(0, 10, f"Distancia total: {distancia} km", ln=True)
     pdf.cell(0, 10, f"Atenuación por km: {atenuacion_km} dB/km", ln=True)
     pdf.cell(0, 10, f"Atenuación máxima permitida: {atenuacion_maxima_permitida} dB", ln=True)
     pdf.cell(0, 10, f"Atenuación total estimada: {atenuacion_total:.2f} dB", ln=True)
-    pdf.cell(0, 10, f"Evento con mayor atenuación: {mayor_atenuacion:.2f} dB a {mayor_distancia} km", ln=True)
+    if mayor_atenuacion is not None and mayor_distancia is not None:
+        pdf.cell(0, 10, f"Evento con mayor atenuación: {mayor_atenuacion:.2f} dB a {mayor_distancia} km", ln=True)
     pdf.ln(5)
 
     # Insertar imagen gráfica
-    pdf.image(buf_fig, x=10, y=80, w=190)
+    pdf.image(ruta_fig, x=10, y=80, w=190)
 
-    # Tabla de eventos
+    # Tabla eventos
     pdf.ln(105)
     pdf.set_font("Arial", "B", 14)
     pdf.cell(0, 10, "Detalle de eventos:", ln=True)
     pdf.set_font("Arial", size=12)
-    # Tabla cabecera
     pdf.cell(30, 10, "Nro Evento", 1)
     pdf.cell(40, 10, "Distancia (km)", 1)
     pdf.cell(60, 10, "Atenuación evento (dB)", 1)
@@ -201,7 +202,6 @@ def crear_pdf():
         pdf.cell(60, 10, str(fila["Atenuación acumulada (dB)"]), 1)
         pdf.ln()
 
-    # Resultado final
     pdf.ln(10)
     pdf.set_font("Arial", "B", 14)
     if cumple_total and cumple_eventos:
