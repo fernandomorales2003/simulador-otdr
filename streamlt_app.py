@@ -2,24 +2,24 @@ import streamlit as st
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
-import io
-import requests
-from PIL import Image
-from fpdf import FPDF
 
 st.set_page_config(layout="wide")
 st.title("🖥️ Simulador de Medición OTDR - Fibra Óptica")
 
-# Selección longitud de onda con checkbox
-st.subheader("⚙️ Configuración de Longitud de Onda")
-uso_1310 = st.checkbox("Usar longitud de onda 1310 nm (0.35 dB/km)", value=False)
-if uso_1310:
+# Selección de longitud de onda
+st.subheader("⚙️ Seleccioná la longitud de onda")
+longitud_onda = st.selectbox(
+    "Elegí la longitud de onda:",
+    options=["1550 nm (0.21 dB/km)", "1310 nm (0.35 dB/km)"]
+)
+
+# Definir atenuación por km según selección
+if longitud_onda.startswith("1310"):
     atenuacion_km = 0.35
 else:
     atenuacion_km = 0.21
 
-# Mostrar atenuación seleccionada (solo info)
-st.markdown(f"**Atenuación por km usada:** {atenuacion_km} dB/km")
+st.markdown(f"**Atenuación por km seleccionada:** {atenuacion_km} dB/km")
 
 # Parámetros
 distancia = st.slider("📏 Distancia del tramo (km)", 1.0, 80.0, 24.0, step=1.0)
@@ -131,4 +131,3 @@ else:
 # Leyenda adicional
 if atenuaciones_eventos:
     st.info(f"🔴 Evento con mayor atenuación: {mayor_atenuacion:.2f} dB a los {mayor_distancia} km")
-
