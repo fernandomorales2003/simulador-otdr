@@ -5,12 +5,12 @@ import numpy as np
 st.set_page_config(layout="wide")
 st.title("📡 Simulación OTDR con Conectores Inicial y Final")
 
-# --- Parámetros configurables ---
-distancia_total_km = st.slider("📏 Distancia total del tramo (km)", 1.0, 80.0, 5.0, step=1.0)
-atenuacion_por_km = st.slider("💡 Atenuación (dB/km)", 0.1, 1.0, 0.35, step=0.01)
-ganancia_conector = st.slider("🔺 Pico reflectivo (dB)", 0.5, 3.0, 1.0, step=0.1)
-nivel_post_conector = st.slider("📉 Nivel luego del conector (dB)", -2.0, 0.0, -0.5, step=0.1)
-agregar_conector_final = st.checkbox("➕ Agregar conector al final", value=True)
+# --- Parámetros fijos ---
+distancia_total_km = 5.0
+atenuacion_por_km = 0.35
+ganancia_conector = 0.80
+nivel_post_conector = -0.25
+agregar_conector_final = True
 
 # --- Distancias clave ---
 longitud_conector_km = 0.075      # 75 metros
@@ -39,7 +39,7 @@ else:
 x_fibra = np.linspace(dist_fin_conector, dist_fibra, 1000)
 y_fibra = -atenuacion_por_km * x_fibra + nivel_post_conector
 
-# --- Conector final (con misma forma que el inicial) ---
+# --- Conector final (misma forma que el inicial) ---
 if agregar_conector_final:
     y_base_final = y_fibra[-1]
     x_final = np.array([
@@ -85,4 +85,3 @@ ax.legend()
 ax.set_ylim(-5, 2)
 ax.set_xlim(0, distancia_total_km + espacio_extra)
 st.pyplot(fig)
-
