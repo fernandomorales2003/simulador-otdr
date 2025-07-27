@@ -4,25 +4,25 @@ import numpy as np
 import pandas as pd
 
 st.set_page_config(layout="wide")
-st.title("🖥️ Simulador de Medición OTDR - Fibra Óptica")
-
-# Selección de longitud de onda
-st.subheader("⚙️ Seleccioná la longitud de onda")
-longitud_onda = st.selectbox(
-    "Elegí la longitud de onda:",
-    options=["1550 nm (0.21 dB/km)", "1310 nm (0.35 dB/km)"]
-)
-
-# Definir atenuación por km según selección
-if longitud_onda.startswith("1310"):
-    atenuacion_km = 0.35
-else:
-    atenuacion_km = 0.21
-
-st.markdown(f"**Atenuación por km seleccionada:** {atenuacion_km} dB/km")
+st.title("💻 Simulador de Medición OTDR - Fibra Óptica")
 
 # Parámetros
 distancia = st.slider("📏 Distancia del tramo (km)", 1.0, 80.0, 24.0, step=1.0)
+
+col1, col2 = st.columns(2)
+with col1:
+    onda_1310 = st.checkbox("Longitud de onda 1310 nm (0.35 dB/km)", value=True)
+with col2:
+    onda_1550 = st.checkbox("Longitud de onda 1550 nm (0.21 dB/km)", value=True)
+
+# Validar que al menos uno esté seleccionado
+if not (onda_1310 or onda_1550):
+    st.warning("Seleccioná al menos una longitud de onda para mostrar la curva.")
+    st.stop()
+
+# Atenuaciones por km según longitud de onda
+atenuacion_1310 = 0.35
+atenuacion_1550 = 0.21
 
 # Generar puntos de fusión cada 4 km
 eventos = int(distancia // 4)
@@ -34,12 +34,20 @@ st.subheader("🔧 Ajustar atenuación por evento de fusión")
 for punto in puntos_evento:
     atenuaciones_eventos[punto] = st.slider(f"Evento en {punto} km", 0.00, 0.50, 0.15, step=0.01)
 
-# Cálculo total de atenuación
-atenuacion_total = atenuacion_km * distancia + sum(atenuaciones_eventos.values())
+# Cálculos para cada longitud de onda
+def calcular_total_y_max(atenuacion_km):
+    atenuacion_total = atenuacion_km * distancia + sum(atenuaciones_eventos.values())
+    atenuacion_maxima_permitida = round((0.21 * distancia) + (0.15 * eventos), 2)
+    return atenuacion_total, atenuacion_maxima_permitida
 
-# Mostrar valor de atenuación máxima permitida
-atenuacion_maxima_permitida = round((atenuacion_km * distancia) + (0.15 * eventos), 2)
-st.markdown(f"✅ **Atenuación máxima permitida:** {atenuacion_maxima_permitida} dB")
+# Calcular para 1310 y 1550 (solo si están seleccionados)
+if onda_1310:
+    atenuacion_total_1310, atenuacion_maxima_1310 = calcular_total_y_max(atenuacion_1310)
+if onda_1550:
+    atenuacion_total_1550, atenuacion_maxima_1550 = calcular_total_y_max(atenuacion_1550)
+
+# Mostrar valor de atenuación máxima permitida (para 1550 por ser el más usado como referencia)
+st.markdown(f"✅ **Atenuación máxima permitida (referencia 1550 nm):** {round((0.21 * distancia) + (0.15 * eventos), 2)} dB")
 
 # Mostrar evento más atenuado
 if atenuaciones_eventos:
@@ -52,31 +60,51 @@ else:
     mayor_atenuacion = None
     st.markdown("🔍 No hay eventos de fusión para mostrar.")
 
-# Simulación de curva OTDR
+# Simulación de curvas OTDR
 x = np.linspace(0, distancia, 1000)
-y = -atenuacion_km * x
 
-# Agregar eventos con caída
-for punto, perdida in atenuaciones_eventos.items():
-    idx = np.searchsorted(x, punto)
-    y[idx:] -= perdida
-
-# Graficar curva OTDR con círculo en evento mayor
 fig, ax = plt.subplots(figsize=(10, 5))
-ax.plot(x, y, label="Curva OTDR")
+
+if onda_1310:
+    y_1310 = -atenuacion_1310 * x
+    for punto, perdida in atenuaciones_eventos.items():
+        idx = np.searchsorted(x, punto)
+        y_1310[idx:] -= perdida
+    ax.plot(x, y_1310, label="1310 nm (azul)", color="blue")
+
+if onda_1550:
+    y_1550 = -atenuacion_1550 * x
+    for punto, perdida in atenuaciones_eventos.items():
+        idx = np.searchsorted(x, punto)
+        y_1550[idx:] -= perdida
+    ax.plot(x, y_1550, label="1550 nm (verde)", color="green")
+
+# Marcar eventos (líneas y texto)
+for punto, perdida in atenuaciones_eventos.items():
+    ax.axvline(punto, color='red', linestyle='--')
+    # Mostrar atenuación evento en la curva 1550 si existe, sino en 1310
+    y_pos = 0
+    if onda_1550:
+        idx = np.searchsorted(x, punto)
+        y_pos = y_1550[idx]
+    elif onda_1310:
+        idx = np.searchsorted(x, punto)
+        y_pos = y_1310[idx]
+    ax.text(punto, y_pos, f"-{perdida:.2f} dB", color="red", rotation=90, va='bottom')
+
+# Marca círculo rojo en evento mayor (en ambas curvas si están activas)
+if mayor_distancia is not None:
+    idx_mayor = np.searchsorted(x, mayor_distancia)
+    if onda_1310:
+        ax.plot(x[idx_mayor], y_1310[idx_mayor], 'o', color='blue', markersize=12, markerfacecolor='none', markeredgewidth=2)
+    if onda_1550:
+        ax.plot(x[idx_mayor], y_1550[idx_mayor], 'o', color='green', markersize=12, markerfacecolor='none', markeredgewidth=2)
+
 ax.set_xlabel("Distancia (km)")
 ax.set_ylabel("Potencia (dB)")
 ax.set_title("Simulación de traza OTDR")
 ax.grid(True)
-
-for punto, perdida in atenuaciones_eventos.items():
-    ax.axvline(punto, color='red', linestyle='--')
-    ax.text(punto, y[np.searchsorted(x, punto)], f"-{perdida:.2f} dB", color="red", rotation=90, va='bottom')
-
-# Marca círculo rojo en evento mayor
-if mayor_distancia is not None:
-    idx_mayor = np.searchsorted(x, mayor_distancia)
-    ax.plot(x[idx_mayor], y[idx_mayor], 'o', color='red', markersize=12, markerfacecolor='none', markeredgewidth=2)
+ax.legend()
 
 st.pyplot(fig)
 
@@ -88,7 +116,9 @@ mayor_index = -1
 
 for i, (dist, att) in enumerate(eventos_lista, start=1):
     acumulado_eventos += att
-    atenuacion_acumulada = (atenuacion_km * dist) + acumulado_eventos
+    # Usamos atenuacion_km de 1550 como referencia para tabla y cálculo de acumulado
+    atenuacion_km_ref = atenuacion_1550 if onda_1550 else atenuacion_1310
+    atenuacion_acumulada = (atenuacion_km_ref * dist) + acumulado_eventos
     tabla_datos.append({
         "Nro Evento": i,
         "Distancia (km)": round(dist, 2),
@@ -112,7 +142,14 @@ if tabla_datos:
 else:
     st.info("No hay eventos de fusión para mostrar en la tabla.")
 
-# Verificación de certificación
+# Verificación de certificación (usamos 1550 si está, si no 1310)
+if onda_1550:
+    atenuacion_total = atenuacion_total_1550
+    atenuacion_maxima_permitida = atenuacion_maxima_1550
+else:
+    atenuacion_total = atenuacion_total_1310
+    atenuacion_maxima_permitida = atenuacion_maxima_1310
+
 evento_supera_limite = next(((i+1, dist, att) for i, (dist, att) in enumerate(eventos_lista) if att > 0.15), None)
 cumple_total = atenuacion_total <= atenuacion_maxima_permitida
 cumple_eventos = evento_supera_limite is None
