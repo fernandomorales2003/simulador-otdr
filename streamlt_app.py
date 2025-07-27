@@ -47,42 +47,47 @@ if check_1310:
 if check_1550:
     st.markdown(f"- 1550 nm: {presupuesto_1550} dB")
 
-x = np.linspace(0, distancia, 1000)
-
-# ✅ Agrega offset y pico reflectivo al inicio y final
+# ✅ Curva con picos reflectivos más separados
 def generar_curva(at_km):
-    y = -at_km * x
+    # Conector inicial: pico y caída en los primeros 40 m
+    x_conector = np.array([0.0, 0.02, 0.04])  # km
+    y_conector = np.array([0.6, -1.0, -1.5])  # dB
+
+    # Curva principal desde 50 m hasta la distancia total
+    x_main = np.linspace(0.05, distancia, 997)
+    y_main = -at_km * x_main
     for punto, perdida in atenuaciones_eventos.items():
-        idx = np.searchsorted(x, punto)
-        y[idx:] -= perdida
+        idx = np.searchsorted(x_main, punto)
+        y_main[idx:] -= perdida
 
-    # Simular conectores reflectivos: offset + pico
-    y += 0.6        # offset general
-    y[0] += 0.6     # pico reflectivo inicial
-    y[-1] += 0.6    # pico reflectivo final
+    # Ajustar offset para continuidad visual
+    y_main += -1.5
 
-    return y
+    x_total = np.concatenate([x_conector, x_main])
+    y_total = np.concatenate([y_conector, y_main])
+
+    return x_total, y_total
 
 # --- Gráfico OTDR ---
 fig, ax = plt.subplots(figsize=(10, 5))
 if check_1310:
-    y_1310 = generar_curva(atenuacion_1310)
-    ax.plot(x, y_1310, label="1310 nm", color="blue")
-    ax.plot(0, y_1310[0], marker='^', color='blue', markersize=12, alpha=0.7, label='_nolegend_')
-    ax.plot(distancia, y_1310[-1], marker='^', color='blue', markersize=12, alpha=0.7, label='_nolegend_')
+    x_1310, y_1310 = generar_curva(atenuacion_1310)
+    ax.plot(x_1310, y_1310, label="1310 nm", color="blue")
+    ax.plot(0, 0.6, marker='^', color='blue', markersize=12, alpha=0.7, label='_nolegend_')
+    ax.plot(distancia, y_1310[-1] + 0.6, marker='^', color='blue', markersize=12, alpha=0.7, label='_nolegend_')
 
 if check_1550:
-    y_1550 = generar_curva(atenuacion_1550)
-    ax.plot(x, y_1550, label="1550 nm", color="green")
-    ax.plot(0, y_1550[0], marker='^', color='green', markersize=12, alpha=0.7, label='_nolegend_')
-    ax.plot(distancia, y_1550[-1], marker='^', color='green', markersize=12, alpha=0.7, label='_nolegend_')
+    x_1550, y_1550 = generar_curva(atenuacion_1550)
+    ax.plot(x_1550, y_1550, label="1550 nm", color="green")
+    ax.plot(0, 0.6, marker='^', color='green', markersize=12, alpha=0.7, label='_nolegend_')
+    ax.plot(distancia, y_1550[-1] + 0.6, marker='^', color='green', markersize=12, alpha=0.7, label='_nolegend_')
 
-# 🔴 Eventos mayores a 0.15 dB
+# 🔴 Eventos destacados
 for punto, perdida in atenuaciones_eventos.items():
     if perdida > 0.15:
         for at_km, color in [(atenuacion_1310, 'blue'), (atenuacion_1550, 'green')]:
             if (check_1310 and at_km == atenuacion_1310) or (check_1550 and at_km == atenuacion_1550):
-                y_val = -at_km * punto - sum([v for k, v in atenuaciones_eventos.items() if k <= punto]) + 0.6
+                y_val = -at_km * punto - sum([v for k, v in atenuaciones_eventos.items() if k <= punto]) - 1.5
                 ax.plot(punto, y_val, 'o', color='red', markersize=10, alpha=0.6, label='_nolegend_')
 
 ax.set_xlabel("Distancia (km)")
@@ -92,7 +97,7 @@ ax.grid(True)
 ax.legend()
 st.pyplot(fig)
 
-# Tabla de eventos
+# Tabla
 def generar_tabla(at_km_tabla):
     eventos_lista = sorted(atenuaciones_eventos.items())
     acumulado_eventos = 0
