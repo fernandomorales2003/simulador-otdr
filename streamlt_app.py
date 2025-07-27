@@ -1,82 +1,203 @@
 import streamlit as st
 import matplotlib.pyplot as plt
 import numpy as np
+import pandas as pd
 
 st.set_page_config(layout="wide")
-st.title("📡 Simulación OTDR con Conectores y Ruido Final")
+st.title("📡 Simulador de Medición OTDR - Fibra Óptica")
 
-# --- Parámetros fijos ---
-distancia_total_km = 5.0
-atenuacion_por_km = 0.35
-ganancia_conector = 0.80
-nivel_post_conector = -0.25
-agregar_conector_final = True
+# Parámetros
+distancia = st.slider("📏 Distancia del tramo (km)", 1.0, 80.0, 24.0, step=1.0)
 
-# --- Distancias clave ---
-longitud_conector_km = 0.075
-dist_pico_inicio = 0.005
-dist_fin_conector = longitud_conector_km
-espacio_extra = 0.2  # aumentamos para ver el ruido
+# Selección de longitud de onda
+st.markdown("### 🎛️ Seleccione la(s) longitud(es) de onda para simular:")
+check_1310 = st.checkbox("1310 nm (Atenuación 0.35 dB/km)", value=True)
+check_1550 = st.checkbox("1550 nm (Atenuación 0.21 dB/km)", value=True)
 
-# --- Conector inicial ---
-x_inicio = np.array([
-    0.0,
-    dist_pico_inicio,
-    dist_fin_conector
-])
-y_inicio = np.array([
-    0.0,
-    ganancia_conector,
-    nivel_post_conector
-])
+if not (check_1310 or check_1550):
+    st.warning("⚠️ Seleccione al menos una longitud de onda para continuar.")
+    st.stop()
 
-# --- Fibra intermedia ---
-if agregar_conector_final:
-    dist_fibra = distancia_total_km - longitud_conector_km
-else:
-    dist_fibra = distancia_total_km
+# Atenuaciones por km
+atenuacion_1310 = 0.35
+atenuacion_1550 = 0.21
 
-x_fibra = np.linspace(dist_fin_conector, dist_fibra, 1000)
-y_fibra = -atenuacion_por_km * x_fibra + nivel_post_conector
+# Generar eventos cada 4 km
+eventos = int(distancia // 4)
+puntos_evento = [round((i + 1) * 4, 2) for i in range(eventos) if (i + 1) * 4 <= distancia]
 
-# --- Conector final (igual al inicial pero invertido) ---
-if agregar_conector_final:
-    y_base_final = y_fibra[-1]
-    x_final = np.array([
-        dist_fibra + 0.005,
-        dist_fibra + 0.010,
-        distancia_total_km
+st.subheader("🔧 Ajustar atenuación por evento de fusión")
+atenuaciones_eventos = {}
+for punto in puntos_evento:
+    atenuaciones_eventos[punto] = st.slider(f"Evento en {punto} km", 0.00, 0.50, 0.15, step=0.01)
+
+def calcular_atenuacion_total(at_km):
+    return at_km * distancia + sum(atenuaciones_eventos.values())
+
+at_total_1310 = calcular_atenuacion_total(atenuacion_1310) if check_1310 else None
+at_total_1550 = calcular_atenuacion_total(atenuacion_1550) if check_1550 else None
+
+# Presupuesto óptico
+presupuesto_1310 = round((atenuacion_1310 * distancia) + (0.15 * eventos), 2)
+presupuesto_1550 = round((atenuacion_1550 * distancia) + (0.15 * eventos), 2)
+
+st.markdown("### 🔆 Presupuesto Óptico")
+if check_1310:
+    st.markdown(f"- 1310 nm: {presupuesto_1310} dB")
+if check_1550:
+    st.markdown(f"- 1550 nm: {presupuesto_1550} dB")
+
+# Función para generar curva con conectores y ruido
+def generar_curva_completa(at_km):
+    x_ini = np.array([0.0, 0.005, 0.075])
+    y_ini = np.array([0.0, 0.8, -0.25])
+
+    x_fibra = np.linspace(0.075, distancia - 0.075, 1000)
+    y_fibra = -at_km * x_fibra + y_ini[-1]
+    for punto, perdida in atenuaciones_eventos.items():
+        idx = np.searchsorted(x_fibra, punto)
+        y_fibra[idx:] -= perdida
+
+    y_fin_base = y_fibra[-1]
+    x_fin = np.array([
+        distancia - 0.075 + 0.005,
+        distancia - 0.075 + 0.010,
+        distancia
     ])
-    y_final = np.array([
-        y_base_final,
-        y_base_final + ganancia_conector,
-        y_base_final - 0.5
+    y_fin = np.array([
+        y_fin_base,
+        y_fin_base + 0.8,
+        y_fin_base - 0.5
     ])
 
-    # --- Ruido posterior (zona muerta o ruido electrónico) ---
-    x_ruido = np.linspace(distancia_total_km, distancia_total_km + espacio_extra, 300)
-    ruido = np.random.normal(loc=y_final[-1], scale=0.15, size=len(x_ruido))
-    
-    # Combinar todo
-    x_total = np.concatenate([x_inicio, x_fibra, x_final, x_ruido])
-    y_total = np.concatenate([y_inicio, y_fibra, y_final, ruido])
-else:
-    x_total = np.concatenate([x_inicio, x_fibra])
-    y_total = np.concatenate([y_inicio, y_fibra])
+    x_ruido = np.linspace(distancia, distancia + 0.1, 300)
+    y_ruido = np.random.normal(loc=y_fin[-1], scale=0.15, size=len(x_ruido))
 
-# --- Gráfico OTDR ---
+    x_total = np.concatenate([x_ini, x_fibra, x_fin, x_ruido])
+    y_total = np.concatenate([y_ini, y_fibra, y_fin, y_ruido])
+    return x_total, y_total
+
+# Gráfico
 fig, ax = plt.subplots(figsize=(10, 5))
-ax.plot(x_total, y_total, label="Curva OTDR", color="blue", linewidth=2)
-ax.scatter(dist_pico_inicio, ganancia_conector, color="red", s=100, label="Conector inicial")
+if check_1310:
+    x_1310, y_1310 = generar_curva_completa(atenuacion_1310)
+    ax.plot(x_1310, y_1310, label="1310 nm", color="blue")
+if check_1550:
+    x_1550, y_1550 = generar_curva_completa(atenuacion_1550)
+    ax.plot(x_1550, y_1550, label="1550 nm", color="green")
 
-if agregar_conector_final:
-    ax.scatter(dist_fibra + 0.010, y_final[1], color="orange", s=100, label="Conector final")
+# Eventos
+for punto, perdida in atenuaciones_eventos.items():
+    if perdida > 0.15:
+        for at_km, color in [(atenuacion_1310, 'blue'), (atenuacion_1550, 'green')]:
+            if (check_1310 and at_km == atenuacion_1310) or (check_1550 and at_km == atenuacion_1550):
+                y_val = -at_km * punto - sum([v for k, v in atenuaciones_eventos.items() if k <= punto])
+                ax.plot(punto, y_val, 'o', color='red', markersize=10, alpha=0.6, label='_nolegend_')
 
 ax.set_xlabel("Distancia (km)")
 ax.set_ylabel("Potencia (dB)")
-ax.set_title("Simulación de OTDR con Conectores y Ruido Final")
+ax.set_title("Simulación de traza OTDR")
 ax.grid(True)
 ax.legend()
-ax.set_ylim(-5, 2)
-ax.set_xlim(0, distancia_total_km + espacio_extra)
 st.pyplot(fig)
+
+# Tabla de eventos
+def generar_tabla(at_km_tabla):
+    eventos_lista = sorted(atenuaciones_eventos.items())
+    acumulado_eventos = 0
+    tabla_datos = []
+    mayor_index = -1
+    mayor_at = 0
+
+    for i, (dist, att) in enumerate(eventos_lista, start=1):
+        acumulado_eventos += att
+        at_acumulada = (at_km_tabla * dist) + acumulado_eventos
+        tabla_datos.append({
+            "Nro Evento": i,
+            "Distancia (km)": dist,
+            "Atenuación del evento (dB)": att,
+            "Atenuación acumulada (dB)": at_acumulada
+        })
+        if att > mayor_at:
+            mayor_at = att
+            mayor_index = i - 1
+
+    at_total_final = round(at_km_tabla * distancia + sum(atenuaciones_eventos.values()), 2)
+    tabla_datos.append({
+        "Nro Evento": "—",
+        "Distancia (km)": distancia,
+        "Atenuación del evento (dB)": 0.00,
+        "Atenuación acumulada (dB)": at_total_final
+    })
+    fila_total_index = len(tabla_datos) - 1
+
+    df = pd.DataFrame(tabla_datos)
+
+    def resaltar_fila(x):
+        colores = [''] * len(x)
+        if mayor_index >= 0:
+            colores[mayor_index] = 'background-color: #ffcccc'
+        colores[fila_total_index] = 'background-color: #ccffcc'
+        return colores
+
+    st.dataframe(
+        df.style
+        .apply(resaltar_fila, axis=0)
+        .format({
+            "Distancia (km)": "{:.2f}",
+            "Atenuación del evento (dB)": "{:.2f}",
+            "Atenuación acumulada (dB)": "{:.2f}"
+        }),
+        use_container_width=True
+    )
+
+    return mayor_at, mayor_index, df
+
+# Mostrar tabla
+st.subheader("📋 Seleccione la tabla de eventos a mostrar:")
+tabla_1310 = st.checkbox("Mostrar tabla para 1310 nm", value=True)
+tabla_1550 = st.checkbox("Mostrar tabla para 1550 nm", value=False)
+
+if tabla_1310 and tabla_1550:
+    st.warning("Por favor seleccione solo una tabla a la vez.")
+    st.stop()
+elif not tabla_1310 and not tabla_1550:
+    st.info("Seleccione una tabla para mostrar.")
+    st.stop()
+
+if tabla_1310:
+    mayor_at, _, df_eventos = generar_tabla(atenuacion_1310)
+elif tabla_1550:
+    mayor_at, _, df_eventos = generar_tabla(atenuacion_1550)
+
+# Verificación
+def verificar_certificacion(at_total, presupuesto):
+    cumple_total = at_total <= presupuesto
+    evento_malo = next(((i+1, dist, att) for i, (dist, att) in enumerate(atenuaciones_eventos.items()) if att > 0.15), None)
+    cumple_eventos = evento_malo is None
+    return cumple_total, cumple_eventos, evento_malo
+
+st.subheader("✅ Resultado de certificación")
+
+if check_1310:
+    c_total_1310, c_eventos_1310, evento_1310 = verificar_certificacion(at_total_1310, presupuesto_1310)
+if check_1550:
+    c_total_1550, c_eventos_1550, evento_1550 = verificar_certificacion(at_total_1550, presupuesto_1550)
+
+def mostrar_resultado(longitud, cumple_total, cumple_eventos, evento, at_total):
+    if cumple_total and cumple_eventos:
+        st.success(f"✅ {longitud} nm - Atenuación Total: {at_total:.2f} dB (DENTRO del límite permitido)")
+        st.markdown("### 🟢 ENLACE CERTIFICADO")
+    else:
+        st.error(f"❌ {longitud} nm - Atenuación Total: {at_total:.2f} dB")
+        st.markdown("### 🔴 NO CERTIFICA POR:")
+        if not cumple_total:
+            st.markdown(f"- 🔺 Atenuación total excede el máximo permitido")
+        if not cumple_eventos and evento is not None:
+            st.markdown(f"- 🔺 Evento N° {evento[0]} con {evento[2]:.2f} dB a los {evento[1]} km")
+
+if check_1310:
+    mostrar_resultado("1310", c_total_1310, c_eventos_1310, evento_1310, at_total_1310)
+if check_1550:
+    mostrar_resultado("1550", c_total_1550, c_eventos_1550, evento_1550, at_total_1550)
+
